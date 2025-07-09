@@ -77,13 +77,13 @@ destroy-staging: ## Destroy staging environment
 	@echo "$(RED)Destroying staging environment...$(NC)"
 	cd terraform/environments/staging && $(TERRAFORM) destroy
 
-docker-build: ## Build Docker image
-	@echo "$(CYAN)Building Docker image...$(NC)"
-	docker build -t $(PROJECT_NAME):latest docker/
+docker-build: ## Build container image with Podman
+	@echo "$(CYAN)Building container image with Podman...$(NC)"
+	podman build -t $(PROJECT_NAME):latest docker/
 
-docker-run: ## Run Docker container
-	@echo "$(CYAN)Running Docker container...$(NC)"
-	docker run -it --rm $(PROJECT_NAME):latest
+docker-run: ## Run container with Podman
+	@echo "$(CYAN)Running container with Podman...$(NC)"
+	podman run -it --rm $(PROJECT_NAME):latest
 
 clean: ## Clean up generated files
 	@echo "$(CYAN)Cleaning up...$(NC)"
@@ -103,3 +103,23 @@ install-hooks: ## Install git hooks
 	pre-commit install
 
 validate: format lint test ## Run all validation checks
+
+localstack-start: ## Start LocalStack with Podman for local AWS testing
+	@echo "$(CYAN)Starting LocalStack with Podman...$(NC)"
+	podman run -d --name localstack \
+		-p 4566:4566 \
+		-e SERVICES=s3,ec2,iam,cloudwatch,dynamodb \
+		localstack/localstack:latest
+	@echo "$(GREEN)LocalStack running on http://localhost:4566$(NC)"
+
+localstack-stop: ## Stop LocalStack
+	@echo "$(CYAN)Stopping LocalStack...$(NC)"
+	podman stop localstack && podman rm localstack
+
+podman-compose-up: ## Start services with podman-compose
+	@echo "$(CYAN)Starting services with podman-compose...$(NC)"
+	cd docker && podman-compose -f podman-compose.yml up -d
+
+podman-compose-down: ## Stop services with podman-compose
+	@echo "$(CYAN)Stopping services with podman-compose...$(NC)"
+	cd docker && podman-compose -f podman-compose.yml down

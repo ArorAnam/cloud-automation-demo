@@ -142,18 +142,36 @@ def deploy(ctx, environment, auto_approve):
         sys.exit(1)
     
     # Plan changes
+    # Note: Terraform plan returns:
+    # 0 = succeeded with empty diff (no changes)
+    # 1 = error occurred
+    # 2 = succeeded with non-empty diff (changes present)
     return_code, stdout, stderr = manager.terraform.plan()
-    if return_code != 0:
+    
+    # Check if it's a real error (code 1) vs successful plan with changes (code 2) or no changes (code 0)
+    if return_code == 1:
         click.echo(f"Terraform plan failed: {stderr}", err=True)
         sys.exit(1)
+    elif return_code == 2:
+        click.echo("✅ Terraform plan succeeded - changes detected")
+    elif return_code == 0:
+        click.echo("✅ Terraform plan succeeded - no changes needed")
+        click.echo("Infrastructure is already up to date!")
+        return
+    else:
+        # Handle any other unexpected return codes
+        click.echo(f"⚠️  Terraform plan returned unexpected code {return_code}")
+        click.echo(f"Output: {stdout}")
+        if stderr:
+            click.echo(f"Warnings/Messages: {stderr}")
     
     # Apply changes
     if auto_approve or click.confirm("Do you want to apply these changes?"):
         return_code, stdout, stderr = manager.terraform.apply(skip_plan=True, auto_approve=True)
         if return_code == 0:
-            click.echo("Deployment successful!")
+            click.echo("🎉 Deployment successful!")
         else:
-            click.echo(f"Deployment failed: {stderr}", err=True)
+            click.echo(f"❌ Deployment failed: {stderr}", err=True)
             sys.exit(1)
     else:
         click.echo("Deployment cancelled.")
@@ -168,18 +186,18 @@ def destroy(ctx, environment, force):
     manager = CloudManager(environment)
     
     if not force:
-        click.echo(f"WARNING: This will destroy all resources in {environment}!")
+        click.echo(f"⚠️  WARNING: This will destroy all resources in {environment}!")
         if not click.confirm("Are you sure you want to continue?"):
             click.echo("Destroy cancelled.")
             return
     
-    click.echo(f"Destroying {environment} environment...")
+    click.echo(f"🗑️  Destroying {environment} environment...")
     
     return_code, stdout, stderr = manager.terraform.destroy(auto_approve=True)
     if return_code == 0:
-        click.echo("Resources destroyed successfully!")
+        click.echo("✅ Resources destroyed successfully!")
     else:
-        click.echo(f"Destroy failed: {stderr}", err=True)
+        click.echo(f"❌ Destroy failed: {stderr}", err=True)
         sys.exit(1)
 
 
@@ -227,15 +245,18 @@ def validate(ctx, environment):
     # Initialize first
     return_code, stdout, stderr = manager.terraform.init()
     if return_code != 0:
-        click.echo(f"Terraform init failed: {stderr}", err=True)
+        click.echo(f"❌ Terraform init failed: {stderr}", err=True)
         sys.exit(1)
     
     # Validate
     return_code, stdout, stderr = manager.terraform.validate()
     if return_code == 0:
-        click.echo("Configuration is valid!")
+        click.echo("✅ Configuration is valid!")
+        # Show any warnings if present
+        if stderr and "Warning" in stderr:
+            click.echo(f"⚠️  Warnings: {stderr}")
     else:
-        click.echo(f"Validation failed: {stderr}", err=True)
+        click.echo(f"❌ Validation failed: {stderr}", err=True)
         sys.exit(1)
 
 

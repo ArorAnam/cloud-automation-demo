@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  cloud-manager:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: cloud-automation-demo:latest
+    container_name: cloud-manager
+    environment:
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
+      - ENVIRONMENT=${ENVIRONMENT:-dev}
+    volumes:
+      - ~/.aws:/home/clouduser/.aws:ro
+      - ../terraform:/app/terraform
+      - terraform-cache:/home/clouduser/.terraform.d
+    networks:
+      - cloud-automation
+    stdin_open: true
+    tty: true
+
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    ports:
+      - "4566:4566"
+      - "4571:4571"
+    environment:
+      - SERVICES=s3,ec2,iam,cloudwatch,dynamodb
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+      - LAMBDA_EXECUTOR=local
+      # Note: Podman uses different socket path
+      - DOCKER_HOST=unix:///run/user/1000/podman/podman.sock
+    volumes:
+      - localstack-data:/tmp/localstack
+      # Podman socket location (adjust UID if needed)
+      - /run/user/1000/podman/podman.sock:/var/run/docker.sock
+    networks:
+      - cloud-automation
+
+volumes:
+  terraform-cache:
+  localstack-data:
+
+networks:
+  cloud-automation:
+    driver: bridge
